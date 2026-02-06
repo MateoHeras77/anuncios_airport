@@ -48,9 +48,13 @@ export default function AnnouncementViewer() {
           >
             <h2 className="text-xl font-semibold text-white">{announcement.title}</h2>
             {/* Handle both string[] (legacy/static) and string (HTML from editor) content */}
-            <div className="mt-3 space-y-3 text-base leading-relaxed text-white/90">
+            <div className="mt-3 text-base leading-relaxed text-white/90">
               {announcement.content.map((paragraph, index) => (
-                 <div key={`${announcement.id}-${index}`} dangerouslySetInnerHTML={{ __html: paragraph }} />
+                 <div 
+                    key={`${announcement.id}-${index}`} 
+                    className="prose prose-invert max-w-none [&>p]:mb-2 [&>p:last-child]:mb-0" 
+                    dangerouslySetInnerHTML={{ __html: paragraph }} 
+                 />
               ))}
             </div>
           </article>

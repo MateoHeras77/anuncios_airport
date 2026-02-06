@@ -432,7 +432,7 @@ export default function AdminPage() {
               </div>
               <h3 className="mt-3 text-xl font-semibold text-white">{title}</h3>
               <div
-                className="prose prose-invert mt-4 max-w-none text-sm"
+                className="prose prose-invert mt-4 max-w-none text-sm [&>p]:mb-2 [&>p:last-child]:mb-0"
                 // eslint-disable-next-line react/no-danger
                 dangerouslySetInnerHTML={{ __html: previewHTML }}
               />
