@@ -50,6 +50,10 @@ export function useAnnouncements() {
     saveAnnouncements(updated);
   };
 
+  const reorderAnnouncements = (newOrder: Announcement[]) => {
+    saveAnnouncements(newOrder);
+  };
+
   // Reset to defaults (useful for testing)
   const resetAnnouncements = () => {
     setAnnouncements(defaultAnnouncements);
@@ -62,6 +66,7 @@ export function useAnnouncements() {
     addAnnouncement,
     updateAnnouncement,
     deleteAnnouncement,
+    reorderAnnouncements,
     resetAnnouncements
   };
 }

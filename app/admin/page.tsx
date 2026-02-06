@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Bold from "@tiptap/extension-bold";
@@ -9,19 +9,31 @@ import Underline from "@tiptap/extension-underline";
 import Heading from "@tiptap/extension-heading";
 import BulletList from "@tiptap/extension-bullet-list";
 import ListItem from "@tiptap/extension-list-item";
-import { categories, type Announcement } from "../data/announcements";
+import { type Announcement } from "../data/announcements";
 import { useAnnouncements } from "../hooks/useAnnouncements";
+import { useCategories } from "../hooks/useCategories";
 
 const toolbarButton =
   "rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 hover:bg-white/10";
 
 export default function AdminPage() {
-  const { announcements, addAnnouncement, updateAnnouncement, deleteAnnouncement } = useAnnouncements();
+  const { announcements, addAnnouncement, updateAnnouncement, deleteAnnouncement, reorderAnnouncements } = useAnnouncements();
+  const { categories, addCategory, deleteCategory } = useCategories();
+  
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // Filter state for the list
+  const [listCategoryFilter, setListCategoryFilter] = useState<string>("all");
+
+  // Form state
   const [selectedCategory, setSelectedCategory] = useState(categories[0]?.id ?? "");
   const [title, setTitle] = useState("New announcement");
   const [isActive, setIsActive] = useState(true);
+
+  // New Category prompt state (using simple prompt for now, or just implicit in add)
+  
+  const dragItem = useRef<number | null>(null);
+  const dragOverItem = useRef<number | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -44,8 +56,86 @@ export default function AdminPage() {
 
   const previewCategory = useMemo(
     () => categories.find((category) => category.id === selectedCategory),
-    [selectedCategory]
+    [selectedCategory, categories]
   );
+  
+  // Update state defaults when categories load
+  useEffect(() => {
+    if (categories.length > 0 && selectedCategory === "") {
+        setSelectedCategory(categories[0].id);
+    }
+  }, [categories, selectedCategory]);
+
+  const filteredAnnouncements = useMemo(() => {
+    if (listCategoryFilter === "all") return announcements;
+    return announcements.filter(a => a.categoryId === listCategoryFilter);
+  }, [announcements, listCategoryFilter]);
+
+  const handleCreateCategory = () => {
+    const name = prompt("Enter new category name:");
+    if (name) {
+       const newCat = addCategory(name);
+       setListCategoryFilter(newCat.id); // Switch to new category
+       setSelectedCategory(newCat.id);   // Set for new items
+       // alert(`Category '${name}' created!`);
+    }
+  };
+
+  const handleDeleteCategory = () => {
+    if (listCategoryFilter === "all") return;
+    
+    // Check if category has announcements
+    const hasItems = announcements.some(a => a.categoryId === listCategoryFilter);
+    if (hasItems) {
+      alert("Cannot delete a category that contains announcements. Please move or delete them first.");
+      return;
+    }
+
+    if (confirm(`Delete category '${categories.find(c => c.id === listCategoryFilter)?.label}'?`)) {
+      deleteCategory(listCategoryFilter);
+      setListCategoryFilter("all");
+      if (selectedCategory === listCategoryFilter) {
+         setSelectedCategory(categories[0]?.id ?? "");
+      }
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent, position: number) => {
+    dragItem.current = position;
+  };
+
+  const handleDragEnter = (e: React.DragEvent, position: number) => {
+    dragOverItem.current = position;
+  };
+
+  const handleDragEnd = () => {
+    if (dragItem.current === null || dragOverItem.current === null || dragItem.current === dragOverItem.current) {
+        dragItem.current = null;
+        dragOverItem.current = null;
+        return;
+    }
+    
+    // Logic to reorder in the MAIN list based on moves in the FILTERED list
+    // 1. Identify valid items being moved
+    const itemToMove = filteredAnnouncements[dragItem.current];
+    const itemTarget = filteredAnnouncements[dragOverItem.current];
+    
+    // 2. clone master list
+    const newAnnouncements = [...announcements];
+
+    // 3. Find their indices in master list
+    const originalIndex = newAnnouncements.findIndex(a => a.id === itemToMove.id);
+    const targetIndex = newAnnouncements.findIndex(a => a.id === itemTarget.id);
+
+    // 4. Move
+    newAnnouncements.splice(originalIndex, 1);
+    newAnnouncements.splice(targetIndex, 0, itemToMove);
+
+    reorderAnnouncements(newAnnouncements);
+    
+    dragItem.current = null;
+    dragOverItem.current = null;
+  };
 
   const handleSelect = (id: string) => {
     const item = announcements.find((a) => a.id === id);
@@ -69,7 +159,8 @@ export default function AdminPage() {
   const handleNew = () => {
     setSelectedId(null);
     setTitle("New announcement");
-    setSelectedCategory(categories[0]?.id ?? "");
+    // Default to the currently filtered category if active, else first avail
+    setSelectedCategory(listCategoryFilter !== "all" ? listCategoryFilter : categories[0]?.id ?? "");
     setIsActive(true);
     editor?.commands.setContent("<p>Type the announcement content here.</p>");
   };
@@ -135,14 +226,54 @@ export default function AdminPage() {
             >
               + New Announcement
             </button>
+
+            {/* Category Filter and Creator */}
+            <div className="space-y-2">
+              <select 
+                className="w-full rounded-md border border-white/10 bg-night px-2 py-2 text-sm text-white"
+                value={listCategoryFilter}
+                onChange={(e) => setListCategoryFilter(e.target.value)}
+              >
+                  <option value="all">All Categories</option>
+                  {categories.map(c => (
+                      <option key={c.id} value={c.id}>{c.label}</option>
+                  ))}
+              </select>
+              
+              <div className="flex gap-2">
+                <button 
+                  onClick={handleCreateCategory}
+                  className="flex flex-1 items-center justify-center rounded-md border border-white/10 bg-white/5 py-1.5 text-xs text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+                >
+                  <span className="mr-1">+</span> New Category
+                </button>
+                {listCategoryFilter !== 'all' && (
+                  <button 
+                    onClick={handleDeleteCategory}
+                    className="flex flex-1 items-center justify-center rounded-md border border-white/10 bg-red-500/10 py-1.5 text-xs text-red-300 hover:bg-red-500/20 transition-colors"
+                  >
+                    Delete Category
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="flex flex-col gap-2">
-              <h3 className="text-xs uppercase tracking-wider text-white/50">Existing</h3>
+              <div className="flex justify-between items-center text-xs uppercase tracking-wider text-white/50">
+                  <h3>{listCategoryFilter === 'all' ? 'All Items' : categories.find(c => c.id === listCategoryFilter)?.label}</h3>
+                  <span className="text-[10px] opacity-60">Drag to reorder</span>
+              </div>
               <div className="flex flex-col gap-1">
-                {announcements.map((a) => (
+                {filteredAnnouncements.map((a, index) => (
                   <button
                     key={a.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, index)}
+                    onDragEnter={(e) => handleDragEnter(e, index)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => e.preventDefault()}
                     onClick={() => handleSelect(a.id)}
-                    className={`text-left rounded px-3 py-2 text-sm transition-colors ${
+                    className={`text-left rounded px-3 py-2 text-sm transition-colors cursor-move ${
                       selectedId === a.id
                         ? "bg-white/20 text-white font-medium"
                         : "text-white/70 hover:bg-white/10 hover:text-white"
@@ -152,6 +283,9 @@ export default function AdminPage() {
                     <div className="text-[10px] text-white/40 uppercase">{categories.find(c => c.id === a.categoryId)?.label}</div>
                   </button>
                 ))}
+                {filteredAnnouncements.length === 0 && (
+                    <div className="py-4 text-center text-xs text-white/30 italic">No announcements</div>
+                )}
               </div>
             </div>
           </div>

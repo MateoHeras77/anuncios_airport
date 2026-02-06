@@ -1,26 +1,36 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { categories } from "../data/announcements";
+import { useMemo, useState, useEffect } from "react";
 import { useAnnouncements } from "../hooks/useAnnouncements";
+import { useCategories } from "../hooks/useCategories";
 import CategoryTabs from "./CategoryTabs";
 
 export default function AnnouncementViewer() {
-  const { announcements, isLoaded } = useAnnouncements();
+  const { announcements, isLoaded: announcementsLoaded } = useAnnouncements();
+  const { categories, isLoaded: categoriesLoaded } = useCategories();
+  
   const sortedCategories = useMemo(
     () => [...categories].sort((a, b) => a.order - b.order),
-    []
+    [categories]
   );
-  const [activeCategoryId, setActiveCategoryId] = useState(sortedCategories[0]?.id ?? "");
+  
+  const [activeCategoryId, setActiveCategoryId] = useState("");
+
+  // Set initial category once loaded
+  useEffect(() => {
+    if (categoriesLoaded && sortedCategories.length > 0 && !activeCategoryId) {
+       setActiveCategoryId(sortedCategories[0].id);
+    }
+  }, [categoriesLoaded, sortedCategories, activeCategoryId]);
 
   const activeAnnouncements = useMemo(() => {
     return announcements.filter(
       (announcement) => announcement.active && announcement.categoryId === activeCategoryId
     );
-  }, [activeCategoryId, announcements]); // Added announcements dependency
+  }, [activeCategoryId, announcements]);
 
-  if (!isLoaded) {
-    return <div className="p-8 text-center text-white/50">Loading announcements...</div>;
+  if (!announcementsLoaded || !categoriesLoaded) {
+    return <div className="p-8 text-center text-white/50">Loading...</div>;
   }
 
   return (
