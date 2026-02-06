@@ -1,4 +1,4 @@
-const CACHE_NAME = "airport-announcements-v1";
+const CACHE_NAME = "airport-announcements-v2";
 const PRECACHE_URLS = ["/", "/manifest.webmanifest", "/icon.svg"]; 
 
 self.addEventListener("install", (event) => {
@@ -26,19 +26,33 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Network First, Fallback to Cache Strategy
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-
-      return fetch(event.request)
-        .then((response) => {
+    fetch(event.request)
+      .then((response) => {
+        // If we got a valid response, clone it and put it in cache
+        // But only if it's a valid http response (not an error like 500)
+        if (response && response.status === 200) {
           const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
-          return response;
-        })
-        .catch(() => caches.match("/"));
-    })
+          caches.open(CACHE_NAME).then((cache) => {
+             cache.put(event.request, responseClone);
+          });
+        }
+        return response;
+      })
+      .catch(() => {
+        // If network fails (offline), try to serve from cache
+        return caches.match(event.request).then((cachedResponse) => {
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+          // Optional: Return a specific offline page if the exact page isn't cached
+          // but for this SPA, the root "/" is usually enough.
+          if (event.request.mode === 'navigate') {
+              return caches.match("/");
+          }
+          return null;
+        });
+      })
   );
 });
