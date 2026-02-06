@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Bold from "@tiptap/extension-bold";
@@ -9,12 +9,16 @@ import Underline from "@tiptap/extension-underline";
 import Heading from "@tiptap/extension-heading";
 import BulletList from "@tiptap/extension-bullet-list";
 import ListItem from "@tiptap/extension-list-item";
-import { announcements, categories } from "../data/announcements";
+import { categories, type Announcement } from "../data/announcements";
+import { useAnnouncements } from "../hooks/useAnnouncements";
 
 const toolbarButton =
   "rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 hover:bg-white/10";
 
 export default function AdminPage() {
+  const { announcements, addAnnouncement, updateAnnouncement, deleteAnnouncement } = useAnnouncements();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
   const [selectedCategory, setSelectedCategory] = useState(categories[0]?.id ?? "");
   const [title, setTitle] = useState("New announcement");
   const [isActive, setIsActive] = useState(true);
@@ -43,9 +47,77 @@ export default function AdminPage() {
     [selectedCategory]
   );
 
+  const handleSelect = (id: string) => {
+    const item = announcements.find((a) => a.id === id);
+    if (!item) return;
+
+    setSelectedId(item.id);
+    setTitle(item.title);
+    setSelectedCategory(item.categoryId);
+    setIsActive(item.active);
+
+    // Convert string[] to HTML for editor
+    // If content is just one string with HTML tags, use it directly
+    // If it's pure text paragraphs, wrap them
+    const htmlContent = item.content
+      .map((p) => (p.startsWith("<") ? p : `<p>${p}</p>`))
+      .join("");
+    
+    editor?.commands.setContent(htmlContent);
+  };
+
+  const handleNew = () => {
+    setSelectedId(null);
+    setTitle("New announcement");
+    setSelectedCategory(categories[0]?.id ?? "");
+    setIsActive(true);
+    editor?.commands.setContent("<p>Type the announcement content here.</p>");
+  };
+
+  const handleSave = () => {
+    if (!editor) return;
+    
+    // Simple way to get content: array with one HTML string
+    // Or we could parse paragraphs. For now, let's keep it simple and consistent.
+    // Ideally we would parse the JSON to strings but preserving HTML formatting requires storing HTML.
+    const content = [editor.getHTML()]; 
+    
+    // Reconstruct the object to save
+    const announcementData = {
+      title,
+      categoryId: selectedCategory,
+      active: isActive,
+      content
+    };
+
+    if (selectedId) {
+      // Update
+      const existing = announcements.find(a => a.id === selectedId);
+      if (existing) {
+         updateAnnouncement({ ...existing, ...announcementData });
+      }
+    } else {
+      // Create
+      const newAnnouncement: Announcement = {
+        id: Date.now().toString(),
+        ...announcementData
+      };
+      addAnnouncement(newAnnouncement);
+      setSelectedId(newAnnouncement.id);
+    }
+  };
+
+  const handleDelete = () => {
+    if (!selectedId) return;
+    if (confirm("Are you sure you want to delete this announcement?")) {
+      deleteAnnouncement(selectedId);
+      handleNew();
+    }
+  };
+
   return (
     <main className="min-h-screen bg-night px-6 py-10 text-white">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-10">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-10">
         <header className="space-y-3">
           <h1 className="text-3xl font-bold">Supervisor editor</h1>
           <p className="max-w-3xl text-sm text-white/70">
@@ -54,7 +126,37 @@ export default function AdminPage() {
           </p>
         </header>
 
-        <section className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+        <section className="grid gap-6 lg:grid-cols-[250px_1fr_1fr]">
+          {/* List Column */}
+          <div className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-4 h-fit">
+            <button
+              onClick={handleNew}
+              className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500"
+            >
+              + New Announcement
+            </button>
+            <div className="flex flex-col gap-2">
+              <h3 className="text-xs uppercase tracking-wider text-white/50">Existing</h3>
+              <div className="flex flex-col gap-1">
+                {announcements.map((a) => (
+                  <button
+                    key={a.id}
+                    onClick={() => handleSelect(a.id)}
+                    className={`text-left rounded px-3 py-2 text-sm transition-colors ${
+                      selectedId === a.id
+                        ? "bg-white/20 text-white font-medium"
+                        : "text-white/70 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    <div className="truncate">{a.title}</div>
+                    <div className="text-[10px] text-white/40 uppercase">{categories.find(c => c.id === a.categoryId)?.label}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Editor Column */}
           <div className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-6">
             <div className="flex flex-wrap gap-4">
               <label className="flex flex-col gap-2 text-xs uppercase tracking-[0.2em] text-white/60">
@@ -111,6 +213,76 @@ export default function AdminPage() {
               <EditorContent editor={editor} className="min-h-[200px] text-sm text-white/90" />
             </div>
 
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={handleSave}
+                className="flex items-center rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500"
+              >
+                {selectedId ? (
+                  <>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="mr-2 h-4 w-4"
+                    >
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                    Update Changes
+                  </>
+                ) : (
+                  <>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="mr-2 h-4 w-4"
+                    >
+                      <path d="M5 12h14" />
+                      <path d="M12 5v14" />
+                    </svg>
+                    Save New Announcement
+                  </>
+                )}
+              </button>
+              {selectedId && (
+                <button
+                  onClick={handleDelete}
+                  className="flex items-center rounded-md bg-red-600/20 px-4 py-2 text-sm font-semibold text-red-200 hover:bg-red-600/30"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="mr-2 h-4 w-4"
+                  >
+                    <path d="M3 6h18" />
+                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                  </svg>
+                  Delete
+                </button>
+              )}
+            </div>
+            
             <p className="text-xs text-white/50">
               Saving in this prototype is local only. Commit changes to the data files and redeploy
               to update tablets.

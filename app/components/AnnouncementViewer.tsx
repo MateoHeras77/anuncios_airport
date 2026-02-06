@@ -1,10 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { announcements, categories } from "../data/announcements";
+import { categories } from "../data/announcements";
+import { useAnnouncements } from "../hooks/useAnnouncements";
 import CategoryTabs from "./CategoryTabs";
 
 export default function AnnouncementViewer() {
+  const { announcements, isLoaded } = useAnnouncements();
   const sortedCategories = useMemo(
     () => [...categories].sort((a, b) => a.order - b.order),
     []
@@ -15,7 +17,11 @@ export default function AnnouncementViewer() {
     return announcements.filter(
       (announcement) => announcement.active && announcement.categoryId === activeCategoryId
     );
-  }, [activeCategoryId]);
+  }, [activeCategoryId, announcements]); // Added announcements dependency
+
+  if (!isLoaded) {
+    return <div className="p-8 text-center text-white/50">Loading announcements...</div>;
+  }
 
   return (
     <section className="space-y-6">
@@ -31,9 +37,10 @@ export default function AnnouncementViewer() {
             className="rounded-2xl border border-white/10 bg-night/60 p-6 shadow-lg"
           >
             <h2 className="text-xl font-semibold text-white">{announcement.title}</h2>
+            {/* Handle both string[] (legacy/static) and string (HTML from editor) content */}
             <div className="mt-3 space-y-3 text-base leading-relaxed text-white/90">
               {announcement.content.map((paragraph, index) => (
-                <p key={`${announcement.id}-${index}`}>{paragraph}</p>
+                 <div key={`${announcement.id}-${index}`} dangerouslySetInnerHTML={{ __html: paragraph }} />
               ))}
             </div>
           </article>
