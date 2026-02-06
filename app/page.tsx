@@ -1,5 +1,5 @@
-import Link from "next/link";
 import AnnouncementViewer from "./components/AnnouncementViewer";
+import EditorButton from "./components/EditorButton";
 import { lastUpdatedAt } from "./data/metadata";
 
 export default function HomePage() {
@@ -13,12 +13,7 @@ export default function HomePage() {
               <span className="rounded-full bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70">
                 Viewer mode
               </span>
-              <Link
-                href="/admin"
-                className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/10 transition-colors"
-              >
-                Editor
-              </Link>
+              <EditorButton />
             </div>
           </div>
           <p className="max-w-3xl text-base text-white/80">
