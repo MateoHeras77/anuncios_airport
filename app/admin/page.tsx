@@ -71,10 +71,10 @@ export default function AdminPage() {
     return announcements.filter(a => a.categoryId === listCategoryFilter);
   }, [announcements, listCategoryFilter]);
 
-  const handleCreateCategory = () => {
+  const handleCreateCategory = async () => {
     const name = prompt("Enter new category name:");
     if (name) {
-       const newCat = addCategory(name);
+       const newCat = await addCategory(name);
        setListCategoryFilter(newCat.id); // Switch to new category
        setSelectedCategory(newCat.id);   // Set for new items
        // alert(`Category '${name}' created!`);
