@@ -1,6 +1,25 @@
 "use client";
 
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect } from "react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  TouchSensor,
+  MouseSensor
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Bold from "@tiptap/extension-bold";
@@ -16,11 +35,150 @@ import { useCategories } from "../hooks/useCategories";
 const toolbarButton =
   "rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 hover:bg-white/10";
 
+interface SortableCategoryItemProps {
+  category: { id: string; label: string };
+  onUpdate: (id: string, label: string) => void;
+  onDelete: (id: string) => void;
+}
+
+function SortableCategoryItem({ category, onUpdate, onDelete }: SortableCategoryItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: category.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 1000 : 'auto',
+    position: 'relative' as const,
+  };
+  
+  const [localLabel, setLocalLabel] = useState(category.label);
+
+  // Sync if prop changes externally
+  useEffect(() => {
+     setLocalLabel(category.label);
+  }, [category.label]);
+
+  const handleBlur = () => {
+      if (localLabel !== category.label) {
+          onUpdate(category.id, localLabel);
+      }
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-2 rounded bg-white/5 p-2 text-sm border border-white/5"
+    >
+      <button 
+        className="cursor-move p-2 text-white/30 hover:text-white/70 active:text-white/90 touch-none select-none"
+        {...attributes} 
+        {...listeners}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+      <input 
+        className="flex-1 bg-transparent px-2 py-1 text-white focus:bg-white/10 focus:outline-none rounded"
+        value={localLabel}
+        onChange={(e) => setLocalLabel(e.target.value)}
+        onBlur={handleBlur}
+      />
+      <button 
+        onClick={() => onDelete(category.id)} 
+        className="p-2 text-red-500/50 hover:text-red-400"
+        title="Delete Category"
+      >
+         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+         </svg>
+      </button>
+    </div>
+  );
+}
+
+interface SortableItemProps {
+  id: string;
+  announcement: Announcement;
+  categories: { id: string; label: string }[];
+  isSelected: boolean;
+  onSelect: (id: string) => void;
+}
+
+function SortableItem({ id, announcement, categories, isSelected, onSelect }: SortableItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 1000 : 'auto',
+    position: 'relative' as const,
+  };
+
+  const categoryLabel = categories.find(c => c.id === announcement.categoryId)?.label;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center rounded text-sm transition-colors ${
+        isSelected
+          ? "bg-white/20 text-white font-medium"
+          : "text-white/70 hover:bg-white/10 hover:text-white"
+      }`}
+    >
+      {/* Drag Handle */}
+      <button 
+        className="cursor-move p-3 text-white/30 hover:text-white/70 active:text-white/90 touch-none select-none"
+        {...attributes} 
+        {...listeners}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+
+      <button
+        onClick={() => onSelect(id)}
+        className="flex-1 text-left py-2 pr-3 min-w-0"
+      >
+        <div className="truncate">{announcement.title}</div>
+        <div className="text-[10px] text-white/40 uppercase">{categoryLabel}</div>
+      </button>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { announcements, addAnnouncement, updateAnnouncement, deleteAnnouncement, reorderAnnouncements } = useAnnouncements();
-  const { categories, addCategory, deleteCategory } = useCategories();
+  const { categories, addCategory, updateCategory, reorderCategories, deleteCategory } = useCategories();
   
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // UI State: Toggle correct panel
+  const [manageCategoriesMode, setManageCategoriesMode] = useState(false);
 
   // Filter state for the list
   const [listCategoryFilter, setListCategoryFilter] = useState<string>("all");
@@ -32,8 +190,16 @@ export default function AdminPage() {
 
   // New Category prompt state (using simple prompt for now, or just implicit in add)
   
-  const dragItem = useRef<number | null>(null);
-  const dragOverItem = useRef<number | null>(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const editor = useEditor({
     extensions: [
@@ -75,12 +241,15 @@ export default function AdminPage() {
     const name = prompt("Enter new category name:");
     if (name) {
        const newCat = await addCategory(name);
-       setListCategoryFilter(newCat.id); // Switch to new category
-       setSelectedCategory(newCat.id);   // Set for new items
-       // alert(`Category '${name}' created!`);
+       if (newCat) {
+          setListCategoryFilter(newCat.id); // Switch to new category
+          setSelectedCategory(newCat.id);   // Set for new items
+       }
     }
   };
 
+  /* 
+   * Replaced by handleDeleteCategoryWithConfirmation passed to item
   const handleDeleteCategory = () => {
     if (listCategoryFilter === "all") return;
     
@@ -99,42 +268,53 @@ export default function AdminPage() {
       }
     }
   };
+  */
 
-  const handleDragStart = (e: React.DragEvent, position: number) => {
-    dragItem.current = position;
-  };
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
 
-  const handleDragEnter = (e: React.DragEvent, position: number) => {
-    dragOverItem.current = position;
-  };
+    if (!over) return;
+    if (active.id === over.id) return;
 
-  const handleDragEnd = () => {
-    if (dragItem.current === null || dragOverItem.current === null || dragItem.current === dragOverItem.current) {
-        dragItem.current = null;
-        dragOverItem.current = null;
-        return;
+    if (manageCategoriesMode) {
+        // Reordering Categories
+        const oldIndex = categories.findIndex(c => c.id === active.id);
+        const newIndex = categories.findIndex(c => c.id === over.id);
+        reorderCategories(arrayMove(categories, oldIndex, newIndex));
+    } else {
+        // Reordering Announcements
+        if (filteredAnnouncements.length !== announcements.length) {
+            // Constrained reorder (within filtered list)
+            // Just swap orders in main list? No, that's messy.
+            // Move item to be next to target in main list.
+            const oldIndex = announcements.findIndex((item) => item.id === active.id);
+            const newIndex = announcements.findIndex((item) => item.id === over.id);
+            reorderAnnouncements(arrayMove(announcements, oldIndex, newIndex));
+        } else {
+            // Simple reorder
+            const oldIndex = announcements.findIndex((item) => item.id === active.id);
+            const newIndex = announcements.findIndex((item) => item.id === over.id);
+            reorderAnnouncements(arrayMove(announcements, oldIndex, newIndex));
+        }
     }
-    
-    // Logic to reorder in the MAIN list based on moves in the FILTERED list
-    // 1. Identify valid items being moved
-    const itemToMove = filteredAnnouncements[dragItem.current];
-    const itemTarget = filteredAnnouncements[dragOverItem.current];
-    
-    // 2. clone master list
-    const newAnnouncements = [...announcements];
+  };
 
-    // 3. Find their indices in master list
-    const originalIndex = newAnnouncements.findIndex(a => a.id === itemToMove.id);
-    const targetIndex = newAnnouncements.findIndex(a => a.id === itemTarget.id);
+  const handleUpdateCategory = (id: string, newLabel: string) => {
+      // Basic validation
+      if (!newLabel.trim()) return;
+      updateCategory(id, newLabel);
+  };
 
-    // 4. Move
-    newAnnouncements.splice(originalIndex, 1);
-    newAnnouncements.splice(targetIndex, 0, itemToMove);
-
-    reorderAnnouncements(newAnnouncements);
-    
-    dragItem.current = null;
-    dragOverItem.current = null;
+  const handleDeleteCategoryWithConfirmation = (id: string) => {
+      // Check if category has announcements
+      const hasItems = announcements.some(a => a.categoryId === id);
+      if (hasItems) {
+        alert("Cannot delete a category that contains announcements. Please move or delete items first.");
+        return;
+      }
+      if (confirm("Delete this category?")) {
+          deleteCategory(id);
+      }
   };
 
   const handleSelect = (id: string) => {
@@ -229,16 +409,18 @@ export default function AdminPage() {
 
             {/* Category Filter and Creator */}
             <div className="space-y-2">
-              <select 
-                className="w-full rounded-md border border-white/10 bg-night px-2 py-2 text-sm text-white"
-                value={listCategoryFilter}
-                onChange={(e) => setListCategoryFilter(e.target.value)}
-              >
-                  <option value="all">All Categories</option>
-                  {categories.map(c => (
-                      <option key={c.id} value={c.id}>{c.label}</option>
-                  ))}
-              </select>
+              {!manageCategoriesMode && (
+                <select 
+                  className="w-full rounded-md border border-white/10 bg-night px-2 py-2 text-sm text-white"
+                  value={listCategoryFilter}
+                  onChange={(e) => setListCategoryFilter(e.target.value)}
+                >
+                    <option value="all">All Categories</option>
+                    {categories.map(c => (
+                        <option key={c.id} value={c.id}>{c.label}</option>
+                    ))}
+                </select>
+              )}
               
               <div className="flex gap-2">
                 <button 
@@ -247,46 +429,75 @@ export default function AdminPage() {
                 >
                   <span className="mr-1">+</span> New Category
                 </button>
-                {listCategoryFilter !== 'all' && (
-                  <button 
-                    onClick={handleDeleteCategory}
-                    className="flex flex-1 items-center justify-center rounded-md border border-white/10 bg-red-500/10 py-1.5 text-xs text-red-300 hover:bg-red-500/20 transition-colors"
-                  >
-                    Delete Category
-                  </button>
-                )}
+                <button 
+                    onClick={() => setManageCategoriesMode(!manageCategoriesMode)}
+                    className={`flex flex-1 items-center justify-center rounded-md border py-1.5 text-xs transition-colors ${
+                        manageCategoriesMode 
+                        ? "bg-blue-600 border-blue-600 text-white" 
+                        : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
+                    }`}
+                >
+                    {manageCategoriesMode ? 'Done' : 'Edit Categories'}
+                </button>
               </div>
             </div>
 
             <div className="flex flex-col gap-2">
               <div className="flex justify-between items-center text-xs uppercase tracking-wider text-white/50">
-                  <h3>{listCategoryFilter === 'all' ? 'All Items' : categories.find(c => c.id === listCategoryFilter)?.label}</h3>
-                  <span className="text-[10px] opacity-60">Drag to reorder</span>
+                  <h3>
+                    {manageCategoriesMode 
+                        ? 'All Categories' 
+                        : (listCategoryFilter === 'all' ? 'All Items' : categories.find(c => c.id === listCategoryFilter)?.label)
+                    }
+                  </h3>
+                  <span className="text-[10px] opacity-60">
+                      {manageCategoriesMode ? 'Drag to reorder' : 'Drag handle to reorder'}
+                  </span>
               </div>
-              <div className="flex flex-col gap-1">
-                {filteredAnnouncements.map((a, index) => (
-                  <button
-                    key={a.id}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, index)}
-                    onDragEnter={(e) => handleDragEnter(e, index)}
-                    onDragEnd={handleDragEnd}
-                    onDragOver={(e) => e.preventDefault()}
-                    onClick={() => handleSelect(a.id)}
-                    className={`text-left rounded px-3 py-2 text-sm transition-colors cursor-move ${
-                      selectedId === a.id
-                        ? "bg-white/20 text-white font-medium"
-                        : "text-white/70 hover:bg-white/10 hover:text-white"
-                    }`}
-                  >
-                    <div className="truncate">{a.title}</div>
-                    <div className="text-[10px] text-white/40 uppercase">{categories.find(c => c.id === a.categoryId)?.label}</div>
-                  </button>
-                ))}
-                {filteredAnnouncements.length === 0 && (
-                    <div className="py-4 text-center text-xs text-white/30 italic">No announcements</div>
+              <DndContext 
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                {manageCategoriesMode ? (
+                    <SortableContext 
+                        items={categories.map(c => c.id)}
+                        strategy={verticalListSortingStrategy}
+                    >
+                         <div className="flex flex-col gap-1">
+                            {categories.map((c) => (
+                                <SortableCategoryItem
+                                    key={c.id}
+                                    category={c}
+                                    onUpdate={handleUpdateCategory}
+                                    onDelete={handleDeleteCategoryWithConfirmation}
+                                />
+                            ))}
+                         </div>
+                    </SortableContext>
+                ) : (
+                    <SortableContext 
+                    items={filteredAnnouncements.map(a => a.id)}
+                    strategy={verticalListSortingStrategy}
+                    >
+                    <div className="flex flex-col gap-1">
+                        {filteredAnnouncements.map((a) => (
+                        <SortableItem
+                            key={a.id}
+                            id={a.id}
+                            announcement={a}
+                            categories={categories}
+                            isSelected={selectedId === a.id}
+                            onSelect={handleSelect}
+                        />
+                        ))}
+                        {filteredAnnouncements.length === 0 && (
+                            <div className="py-4 text-center text-xs text-white/30 italic">No announcements</div>
+                        )}
+                    </div>
+                    </SortableContext>
                 )}
-              </div>
+              </DndContext>
             </div>
           </div>
 

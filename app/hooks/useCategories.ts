@@ -27,21 +27,63 @@ export function useCategories() {
   };
 
   const addCategory = async (label: string) => {
-    const newCategory: Category = {
-      id: label.toLowerCase().replace(/\s+/g, "-"),
-      label,
-      order: categories.length + 1,
-    };
+    // Generate ID from label
+    const id = label
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, "")
+      .replace(/[\s_-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
 
+    const newCategory = {
+      id,
+      label,
+      order: categories.length, // Add to end
+    };
+    
+    // ... existing insert code ...
     const { error } = await supabase.from("categories").insert([newCategory]);
 
     if (error) {
       console.error("Error adding category:", error);
       alert("Failed to add category");
+      return null;
     } else {
       setCategories((prev) => [...prev, newCategory]);
+      return newCategory;
     }
-    return newCategory;
+  };
+
+  const updateCategory = async (id: string, label: string) => {
+    const { error } = await supabase
+      .from("categories")
+      .update({ label })
+      .eq("id", id);
+
+    if (error) {
+      console.error("Error updating category:", error);
+      alert("Failed to update category");
+    } else {
+      setCategories((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, label } : c))
+      );
+    }
+  };
+
+  const reorderCategories = async (newOrder: Category[]) => {
+    const updates = newOrder.map((cat, index) => ({
+      ...cat,
+      order: index,
+    }));
+    
+    // Optimistic
+    setCategories(updates);
+
+    const { error } = await supabase.from("categories").upsert(updates);
+    
+    if (error) {
+       console.log("Error reordering categories", error)
+    }
   };
 
   const deleteCategory = async (id: string) => {
@@ -59,6 +101,8 @@ export function useCategories() {
     categories,
     isLoaded,
     addCategory,
+    updateCategory,
+    reorderCategories,
     deleteCategory,
   };
 }
