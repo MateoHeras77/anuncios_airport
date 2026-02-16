@@ -40,19 +40,19 @@ self.addEventListener("fetch", (event) => {
         }
         return response;
       })
-      .catch(() => {
-        // If network fails (offline), try to serve from cache
-        return caches.match(event.request).then((cachedResponse) => {
+      .catch(() =>
+        caches.match(event.request).then((cachedResponse) => {
           if (cachedResponse) {
             return cachedResponse;
           }
-          // Optional: Return a specific offline page if the exact page isn't cached
-          // but for this SPA, the root "/" is usually enough.
-          if (event.request.mode === 'navigate') {
-              return caches.match("/");
+          if (event.request.mode === "navigate") {
+            return caches.match("/");
           }
-          return null;
-        });
-      })
+          return new Response("Offline", {
+            status: 503,
+            headers: { "Content-Type": "text/plain" }
+          });
+        })
+      )
   );
 });

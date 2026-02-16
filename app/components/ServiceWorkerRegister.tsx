@@ -8,14 +8,22 @@ export default function ServiceWorkerRegister() {
       return;
     }
 
-    const onLoad = () => {
-      navigator.serviceWorker.register("/sw.js").catch(() => {
-        // ignore registration failures for offline resilience
-      });
+    const register = () => {
+      navigator.serviceWorker
+        .register("/sw.js", { scope: "/" })
+        .then(() => navigator.serviceWorker.ready)
+        .catch(() => {
+          // ignore registration failures for offline resilience
+        });
     };
 
-    window.addEventListener("load", onLoad);
-    return () => window.removeEventListener("load", onLoad);
+    if (document.readyState === "complete") {
+      register();
+      return;
+    }
+
+    window.addEventListener("load", register);
+    return () => window.removeEventListener("load", register);
   }, []);
 
   return null;
